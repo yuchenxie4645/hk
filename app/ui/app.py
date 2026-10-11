@@ -41,41 +41,12 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             allowed_paths.append(str(Path(mock_temp).resolve()))
     css = """
     .gradio-container { max-width: 1320px !important; padding: 1.25rem !important; }
-    .lr-header {
-        padding: 1.5rem 1.75rem;
-        border: 1px solid #dbe5f0;
-        border-radius: 20px;
-        background: linear-gradient(115deg, #f5f8ff 0%, #f2fbfa 100%);
-        box-shadow: 0 8px 28px rgba(30, 64, 110, 0.06);
-    }
-    .lr-eyebrow {
-        color: #46617e;
-        font-size: 0.76rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-    }
     .lr-note { color: #526277; font-size: 0.96rem; line-height: 1.55; }
-    .lr-callout {
-        margin: 0.75rem 0;
-        padding: 0.9rem 1rem;
-        border-left: 4px solid #4f46e5;
-        border-radius: 10px;
-        background: #f7f8ff;
-        color: #29364a;
-        line-height: 1.5;
-    }
     .lr-success {
         padding: 0.7rem 0.85rem;
         border: 1px solid #b8e0cf;
         border-radius: 10px;
         background: #f2fbf6;
-    }
-    .lr-privacy {
-        padding: 0.85rem 1rem;
-        border: 1px solid #dbe5f0;
-        border-radius: 12px;
-        background: #fbfcfe;
     }
     .lr-small { color: #526277; font-size: 0.86rem; line-height: 1.45; }
     .lr-section {
@@ -84,7 +55,6 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
     }
     @media (max-width: 700px) {
         .gradio-container { padding: 0.65rem !important; }
-        .lr-header { padding: 1rem; border-radius: 14px; }
     }
     """
     with gr.Blocks(
@@ -93,27 +63,12 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
         theme=gr.themes.Soft(primary_hue="indigo", secondary_hue="teal", neutral_hue="slate"),
     ) as demo:
         source_id = gr.State(value="")
-        gr.Markdown(
-            "<div class='lr-eyebrow'>Local workspace memory</div>\n"
-            "# LocalRecall\n"
-            "Remember where things were last seen. Add a workspace, compare two moments, "
-            "and ask questions backed by saved event evidence.\n\n"
-            "**SET UP** → **CAPTURE** → **REVIEW** → **ASK**\n\n"
-            "Private by design: backend inference runs locally; mock mode uses fixtures and never starts a model.",
-            elem_classes=["lr-header"],
-        )
+        calibration_frame = gr.State(value=None)
         status_line = gr.Markdown("Checking local status…")
 
         with gr.Tabs():
             with gr.Tab("Watch"):
                 gr.Markdown("## Remember a change", elem_classes=["lr-section"])
-                gr.Markdown(
-                    "### Recommended demo path: Manual Remember\n"
-                    "Add an earlier image on the left and a later image on the right. "
-                    "Capture each moment with the Spark camera, or upload PNG/JPEG files as a fallback. "
-                    "This path works even when live streaming is unavailable.",
-                    elem_classes=["lr-callout"],
-                )
                 with gr.Row():
                     with gr.Column():
                         before = gr.Image(
@@ -280,7 +235,7 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                     "Load three demo zones",
                     variant="secondary" if isinstance(facade, MockFacade) else "primary",
                 )
-                zone_result = gr.Markdown("No zones loaded yet.")
+                zone_result = gr.Markdown(callbacks.zone_configuration_status(facade))
                 with gr.Row():
                     setup_zone_table = gr.Dataframe(
                         headers=["Zone", "ID", "Normalized bounds", "Status"],
@@ -303,16 +258,43 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                 )
                 enroll_button = gr.Button("Save object reference", variant="primary")
                 setup_result = gr.Markdown()
-                gr.Markdown("### Add a rectangular zone")
+                gr.Markdown("### Calibrate rectangular zones")
+                gr.Markdown(
+                    "Capture one frozen image from the Spark camera, then compare every active zone at once. "
+                    "Coordinates are normalized fractions of the image: 0 is the left/top edge and 1 is the "
+                    "right/bottom edge. Preview changes without inference, another capture, or a database write.",
+                    elem_classes=["lr-note"],
+                )
+                capture_calibration_button = gr.Button(
+                    "Capture calibration image (Spark camera)",
+                    variant="primary",
+                )
+                calibration_status = gr.Markdown(
+                    "No calibration image captured. Capture one to see saved zones and draft changes."
+                )
+                calibration_preview = gr.Image(
+                    label="Frozen calibration image with zone overlays",
+                    type="numpy",
+                    interactive=False,
+                )
+                zone_selector = gr.Dropdown(
+                    choices=callbacks.zone_editor_choices(facade),
+                    value=callbacks.NEW_ZONE_VALUE,
+                    label="Zone to edit",
+                    info="Choose New zone to create one, or select an active zone to preserve and edit its ID.",
+                )
+                zone_editor_status = gr.Markdown("Creating a new zone. Choose a unique lowercase ID.")
                 with gr.Row():
                     zone_name = gr.Textbox(label="Zone name", placeholder="Shelf")
                     zone_slug = gr.Textbox(label="Zone ID", placeholder="shelf")
                 with gr.Row():
-                    x1 = gr.Number(label="x1", value=0.0, minimum=0, maximum=1)
-                    y1 = gr.Number(label="y1", value=0.0, minimum=0, maximum=1)
-                    x2 = gr.Number(label="x2", value=1.0, minimum=0, maximum=1)
-                    y2 = gr.Number(label="y2", value=1.0, minimum=0, maximum=1)
-                zone_save = gr.Button("Save zone")
+                    x1 = gr.Number(label="Left (x1, 0–1)", value=0.0, minimum=0, maximum=1)
+                    y1 = gr.Number(label="Top (y1, 0–1)", value=0.0, minimum=0, maximum=1)
+                    x2 = gr.Number(label="Right (x2, 0–1)", value=1.0, minimum=0, maximum=1)
+                    y2 = gr.Number(label="Bottom (y2, 0–1)", value=1.0, minimum=0, maximum=1)
+                with gr.Row():
+                    preview_zone_button = gr.Button("Preview changes")
+                    zone_save = gr.Button("Save zone changes", variant="primary")
                 with gr.Row():
                     delete_object_id = gr.Textbox(label="Object ID to remove")
                     delete_object_button = gr.Button("Remove object reference")
@@ -323,14 +305,6 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             with gr.Tab("System & Privacy"):
                 gr.Markdown("## System health and data handling")
                 system_status = gr.Markdown()
-                gr.Markdown(
-                    "The Spark camera takes a snapshot only when you press a Capture button. "
-                    "Laptop-browser camera frames travel from this browser to the local backend over your laptop-to-GB10 connection. "
-                    "The app retains enrolled object references and selected event evidence; it does not write a "
-                    "continuous video. Gradio may create temporary upload/cache files in the configured local "
-                    "folder, which the app manages and cleans up. The status above reports the observed cache count.",
-                    elem_classes=["lr-privacy"],
-                )
                 with gr.Accordion("How this local demo works", open=False):
                     gr.Markdown(
                         "- A camera attached to the Spark takes one snapshot per Capture button press; it never records video. "
@@ -387,11 +361,44 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
 
-        def wrapped_load_zones():
+        def zone_selector_update(selected_zone_id):
+            choices = callbacks.zone_editor_choices(facade)
+            valid_ids = {value for _, value in choices}
+            selected = (
+                selected_zone_id
+                if selected_zone_id in valid_ids
+                else callbacks.NEW_ZONE_VALUE
+            )
+            return gr.update(choices=choices, value=selected)
+
+        def wrapped_load_zones(selected_zone_id):
             try:
-                return callbacks.load_zones(facade)
+                message, rows = callbacks.load_zones(facade)
+                return message, rows, zone_selector_update(selected_zone_id)
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
+
+        def wrapped_capture_calibration():
+            try:
+                return callbacks.capture_calibration_image(facade)
+            except Exception as exc:
+                raise gr.Error(str(exc)) from exc
+
+        def wrapped_select_zone(selected_zone_id):
+            try:
+                values = list(callbacks.select_zone(facade, selected_zone_id))
+                values[1] = gr.update(
+                    value=values[1],
+                    interactive=selected_zone_id == callbacks.NEW_ZONE_VALUE,
+                )
+                return tuple(values)
+            except Exception as exc:
+                raise gr.Error(str(exc)) from exc
+
+        def wrapped_preview_zone(frame, name, slug, left, top, right, bottom):
+            return callbacks.preview_zone_changes(
+                facade, frame, name or "", slug or "", left, top, right, bottom
+            )
 
         def wrapped_ingest(frame, session_id):
             try:
@@ -419,9 +426,10 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
 
-        def wrapped_delete_zone(zone_id):
+        def wrapped_delete_zone(zone_id, selected_zone_id):
             try:
-                return callbacks.delete_zone(facade, zone_id or "")
+                message = callbacks.delete_zone(facade, zone_id or "")
+                return message, zone_selector_update(selected_zone_id)
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
 
@@ -452,9 +460,19 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                 "Enter an event ID from the timeline, adjust fields, then apply correction.",
             )
 
-        def wrapped_save_zone(name, slug, left, top, right, bottom):
+        def wrapped_save_zone(selected_zone_id, name, slug, left, top, right, bottom):
             try:
-                return callbacks.save_zone(facade, name or "", slug or "", left, top, right, bottom)
+                message = callbacks.save_zone_changes(
+                    facade,
+                    selected_zone_id,
+                    name or "",
+                    slug or "",
+                    left,
+                    top,
+                    right,
+                    bottom,
+                )
+                return message, zone_selector_update(selected_zone_id)
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
 
@@ -498,15 +516,41 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             outputs=[setup_result],
             queue=True,
         ).then(refresh_all, outputs=refresh_outputs, queue=False)
-        zones_button.click(wrapped_load_zones, outputs=[zone_result, setup_zone_table], queue=True).then(
+        zones_button.click(
+            wrapped_load_zones,
+            inputs=[zone_selector],
+            outputs=[zone_result, setup_zone_table, zone_selector],
+            queue=True,
+        ).then(
             refresh_all, outputs=refresh_outputs, queue=False
+        )
+        capture_calibration_button.click(
+            wrapped_capture_calibration,
+            outputs=[calibration_frame, calibration_preview, calibration_status],
+            queue=True,
+            concurrency_id="spark_camera",
+            concurrency_limit=1,
+        )
+        zone_selector.change(
+            wrapped_select_zone,
+            inputs=[zone_selector],
+            outputs=[zone_name, zone_slug, x1, y1, x2, y2, zone_editor_status],
+            queue=False,
+        )
+        preview_zone_button.click(
+            wrapped_preview_zone,
+            inputs=[calibration_frame, zone_name, zone_slug, x1, y1, x2, y2],
+            outputs=[calibration_preview, calibration_status],
+            queue=False,
         )
         zone_save.click(
             wrapped_save_zone,
-            inputs=[zone_name, zone_slug, x1, y1, x2, y2],
-            outputs=[zone_result],
+            inputs=[zone_selector, zone_name, zone_slug, x1, y1, x2, y2],
+            outputs=[zone_result, zone_selector],
             queue=True,
-        ).then(refresh_all, outputs=refresh_outputs, queue=False)
+        ).then(
+            refresh_all, outputs=refresh_outputs, queue=False
+        )
         browser_camera.stream(
             wrapped_ingest,
             inputs=[browser_camera, source_id],
@@ -524,7 +568,12 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             queue=True,
         )
         delete_object_button.click(wrapped_delete_object, inputs=[delete_object_id], outputs=[setup_result], queue=True)
-        delete_zone_button.click(wrapped_delete_zone, inputs=[delete_zone_id], outputs=[zone_result], queue=True).then(
+        delete_zone_button.click(
+            wrapped_delete_zone,
+            inputs=[delete_zone_id, zone_selector],
+            outputs=[zone_result, zone_selector],
+            queue=True,
+        ).then(
             refresh_all, outputs=refresh_outputs, queue=False
         )
         export_button.click(wrapped_export, outputs=[export_file], queue=True)

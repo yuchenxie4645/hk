@@ -326,6 +326,27 @@ class MockFacade:
         self.zones.append(record)
         return record
 
+    def update_zone(self, display_name, zone_id, x1, y1, x2, y2):
+        normalized_id = (zone_id or "").strip().lower()
+        index = next(
+            (index for index, zone in enumerate(self.zones) if zone.id == normalized_id),
+            None,
+        )
+        if index is None:
+            raise ValueError(f"No active zone has ID `{normalized_id}`; select it again.")
+        record = build_zone_record(
+            display_name,
+            normalized_id,
+            x1,
+            y1,
+            x2,
+            y2,
+            active_zone_count=len(self.zones),
+            enforce_zone_limit=False,
+        )
+        self.zones[index] = record
+        return record
+
     def delete_object(self, object_id: str):
         if not any(obj.id == object_id for obj in self.objects):
             raise KeyError(f"object {object_id} not found")

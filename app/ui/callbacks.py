@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from app.composite import render_zone_overlay
 from app.contracts import LocalRecallFacade
-from app.facade import DEFAULT_ZONES
+from app.facade import DEFAULT_ZONES, build_zone_record
 from app.ui.transforms import (
     event_markdown,
     event_rows,
@@ -16,6 +17,8 @@ from app.ui.transforms import (
     status_markdown,
     zone_rows,
 )
+
+NEW_ZONE_VALUE = "__new_zone__"
 
 
 def analyze_pair(facade: LocalRecallFacade, before: np.ndarray | None, after: np.ndarray | None):
@@ -40,6 +43,102 @@ def analyze_pair(facade: LocalRecallFacade, before: np.ndarray | None, after: np
 
 def capture_spark_frame(facade: LocalRecallFacade) -> np.ndarray:
     return facade.capture_camera_frame()
+
+
+def capture_calibration_image(facade: LocalRecallFacade):
+    frame = facade.capture_camera_frame()
+    preview = render_zone_overlay(frame, facade.get_zones())
+    return (
+        frame,
+        preview,
+        (
+            "**Calibration image captured.** Saved active zones are overlaid; the frozen base image "
+            "is unchanged until you capture again."
+        ),
+    )
+
+
+def zone_configuration_status(facade: LocalRecallFacade) -> str:
+    zones = facade.get_zones()
+    if not zones:
+        return "No active zones configured yet. Choose **New zone** below or load the demo zones."
+    return f"**{len(zones)} active zone{'s' if len(zones) != 1 else ''} configured.** Select one below to edit it."
+
+
+def zone_editor_choices(facade: LocalRecallFacade) -> list[tuple[str, str]]:
+    return [("New zone", NEW_ZONE_VALUE), *[(f"{z.display_name} · {z.id}", z.id) for z in facade.get_zones()]]
+
+
+def select_zone(facade: LocalRecallFacade, selected_zone_id: str | None):
+    selected = selected_zone_id or NEW_ZONE_VALUE
+    if selected == NEW_ZONE_VALUE:
+        return "", "", 0.0, 0.0, 1.0, 1.0, "Creating a new zone. Choose a unique lowercase ID."
+    zone = next((item for item in facade.get_zones() if item.id == selected), None)
+    if zone is None:
+        raise ValueError(f"No active zone has ID `{selected}`; refresh the selection.")
+    xs = [point[0] for point in zone.polygon]
+    ys = [point[1] for point in zone.polygon]
+    return (
+        zone.display_name,
+        zone.id,
+        min(xs),
+        min(ys),
+        max(xs),
+        max(ys),
+        f"Editing **{zone.display_name}**. Its ID is fixed so saved event history remains valid.",
+    )
+
+
+def _zone_numbers(x1, y1, x2, y2) -> tuple[float, float, float, float]:
+    try:
+        return float(x1), float(y1), float(x2), float(y2)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Enter numeric bounds for Left, Top, Right, and Bottom.") from exc
+
+
+def _draft_zone(display_name, zone_id, x1, y1, x2, y2):
+    name = (display_name or "").strip()
+    slug = (zone_id or "").strip()
+    if not name:
+        raise ValueError("Enter a zone name (for example: Shelf).")
+    if not slug:
+        raise ValueError("Enter a zone ID (for example: shelf).")
+    left, top, right, bottom = _zone_numbers(x1, y1, x2, y2)
+    return build_zone_record(
+        name,
+        slug,
+        left,
+        top,
+        right,
+        bottom,
+        active_zone_count=0,
+        enforce_zone_limit=False,
+    )
+
+
+def preview_zone_changes(
+    facade: LocalRecallFacade,
+    calibration_frame: np.ndarray | None,
+    display_name: str,
+    zone_id: str,
+    x1,
+    y1,
+    x2,
+    y2,
+):
+    if calibration_frame is None:
+        return None, (
+            "Capture a calibration image first. Previewing never runs model inference, captures "
+            "another frame, or writes to SQLite."
+        )
+    try:
+        draft = _draft_zone(display_name, zone_id, x1, y1, x2, y2)
+    except ValueError as exc:
+        return render_zone_overlay(calibration_frame, facade.get_zones()), f"**Cannot preview:** {exc}"
+    return (
+        render_zone_overlay(calibration_frame, facade.get_zones(), draft_zone=draft),
+        f"**Draft preview:** {draft.display_name} (`{draft.id}`) is highlighted in amber. Nothing has been saved.",
+    )
 
 
 def ask(facade: LocalRecallFacade, question: str):
@@ -104,7 +203,8 @@ def add_zone(
         raise ValueError("Enter a zone name (for example: Shelf).")
     if not slug:
         raise ValueError("Enter a zone ID (for example: shelf).")
-    return facade.add_zone(name, slug, float(x1), float(y1), float(x2), float(y2))
+    left, top, right, bottom = _zone_numbers(x1, y1, x2, y2)
+    return facade.add_zone(name, slug, left, top, right, bottom)
 
 
 def save_zone(
@@ -119,6 +219,43 @@ def save_zone(
     record = add_zone(facade, display_name, zone_id, x1, y1, x2, y2)
     return save_zone_message(record)
 
+
+def save_zone_changes(
+    facade: LocalRecallFacade,
+    selected_zone_id: str | None,
+    display_name: str,
+    zone_id: str,
+    x1,
+    y1,
+    x2,
+    y2,
+) -> str:
+    selected = selected_zone_id or NEW_ZONE_VALUE
+    draft = _draft_zone(display_name, zone_id, x1, y1, x2, y2)
+    if selected == NEW_ZONE_VALUE:
+        record = facade.add_zone(
+            draft.display_name,
+            draft.id,
+            draft.polygon[0][0],
+            draft.polygon[0][1],
+            draft.polygon[2][0],
+            draft.polygon[2][1],
+        )
+        return f"Created zone **{record.display_name}** (`{record.id}`)."
+    if draft.id != selected:
+        raise ValueError(
+            f"Zone ID `{selected}` is fixed because saved events may reference it; "
+            "choose New zone to create a different ID."
+        )
+    record = facade.update_zone(
+        draft.display_name,
+        selected,
+        draft.polygon[0][0],
+        draft.polygon[0][1],
+        draft.polygon[2][0],
+        draft.polygon[2][1],
+    )
+    return f"Updated zone **{record.display_name}** (`{record.id}`) without changing its history."
 
 def ingest_browser_frame(facade: LocalRecallFacade, frame: np.ndarray | None, source_id: str):
     if frame is None:

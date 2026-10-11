@@ -34,17 +34,64 @@ def _as_rgb_image(frame: np.ndarray) -> Image.Image:
     return Image.fromarray(frame)
 
 
-def _draw_zones(image: Image.Image, zones: list[ZoneRecord]) -> None:
+def normalized_polygon_pixels(
+    polygon: list[tuple[float, float]], width: int, height: int
+) -> list[tuple[int, int]]:
+    """Map normalized zone points to pixels using the inference-composite convention."""
+    return [(int(x * width), int(y * height)) for x, y in polygon]
+
+
+def _draw_zones(
+    image: Image.Image,
+    zones: list[ZoneRecord],
+    *,
+    draft_zone: ZoneRecord | None = None,
+) -> None:
     draw = ImageDraw.Draw(image, "RGBA")
     w, h = image.size
     palette = [(30, 115, 201), (56, 142, 60), (207, 84, 48), (133, 86, 181)]
     for index, zone in enumerate(zones):
         color = palette[index % len(palette)]
-        points = [(int(x * w), int(y * h)) for x, y in zone.polygon]
+        points = normalized_polygon_pixels(zone.polygon, w, h)
         draw.polygon(points, fill=(*color, 24), outline=(*color, 230), width=max(3, w // 320))
         x, y = points[0]
-        draw.rounded_rectangle((x + 4, y + 4, x + 180, y + 35), radius=6, fill=(*color, 220))
-        draw.text((x + 10, y + 8), zone.id, fill="white", font=_font(16, True))
+        label = f"{zone.display_name} · {zone.id}"
+        text_box = draw.textbbox((0, 0), label, font=_font(16, True))
+        label_width = min(w - max(0, x + 4), text_box[2] - text_box[0] + 20)
+        draw.rounded_rectangle(
+            (x + 4, y + 4, x + 4 + label_width, y + 35),
+            radius=6,
+            fill=(*color, 220),
+        )
+        draw.text((x + 10, y + 8), label, fill="white", font=_font(16, True))
+    if draft_zone is not None:
+        points = normalized_polygon_pixels(draft_zone.polygon, w, h)
+        color = (245, 158, 11)
+        width = max(5, w // 180)
+        draw.polygon(points, fill=(*color, 42), outline=(255, 255, 255, 255), width=width + 3)
+        draw.line(points + [points[0]], fill=(*color, 255), width=width, joint="curve")
+        x, y = points[0]
+        label = f"DRAFT · {draft_zone.display_name} · {draft_zone.id}"
+        text_box = draw.textbbox((0, 0), label, font=_font(16, True))
+        label_width = min(w - max(0, x + 4), text_box[2] - text_box[0] + 20)
+        draw.rounded_rectangle(
+            (x + 4, y + 4, x + 4 + label_width, y + 35),
+            radius=6,
+            fill=(*color, 245),
+        )
+        draw.text((x + 10, y + 8), label, fill="black", font=_font(16, True))
+
+
+def render_zone_overlay(
+    frame_rgb: np.ndarray,
+    zones: list[ZoneRecord],
+    *,
+    draft_zone: ZoneRecord | None = None,
+) -> np.ndarray:
+    """Render saved zones and an optional draft on a copy of a frozen RGB frame."""
+    image = _as_rgb_image(frame_rgb.copy())
+    _draw_zones(image, zones, draft_zone=draft_zone)
+    return np.asarray(image, dtype=np.uint8).copy()
 
 
 def build_composite(

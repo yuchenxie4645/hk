@@ -41,6 +41,43 @@ def test_ui_exposes_manual_pair_camera_health_and_setup_registries():
     assert "Configured zones" in config_text
     assert "Registered objects" in config_text
     assert "How this local demo works" in config_text
+    assert "Capture calibration image (Spark camera)" in config_text
+    assert "Preview changes" in config_text
+    assert "Save zone changes" in config_text
+    assert "Zone to edit" in config_text
+
+
+def test_ui_omits_removed_washed_out_explanatory_blocks():
+    app = create_app(MockFacade())
+    config_text = str(app.get_config_file())
+
+    assert "Local workspace memory" not in config_text
+    assert "Recommended demo path: Manual Remember" not in config_text
+    assert "The Spark camera takes a snapshot only when you press a Capture button." not in config_text
+    assert "lr-header" not in config_text
+    assert "lr-callout" not in config_text
+    assert "lr-privacy" not in config_text
+
+
+def test_zone_callbacks_bind_click_inputs_directly_without_empty_then_payloads():
+    app = create_app(MockFacade())
+    dependencies = app.get_config_file()["dependencies"]
+    by_name = {dependency["api_name"]: dependency for dependency in dependencies}
+
+    assert not any(name.startswith("refresh_zone_selector") for name in by_name)
+    expected_shapes = {
+        "wrapped_load_zones": (1, 3),
+        "wrapped_select_zone": (1, 7),
+        "wrapped_preview_zone": (7, 2),
+        "wrapped_save_zone": (7, 2),
+        "wrapped_delete_zone": (2, 2),
+    }
+    for name, (input_count, output_count) in expected_shapes.items():
+        dependency = by_name[name]
+        assert len(dependency["inputs"]) == input_count
+        assert len(dependency["outputs"]) == output_count
+        assert dependency["trigger_after"] is None
+        assert dependency["targets"][0][1] in {"click", "change"}
 
 
 def test_mock_refresh_rows_are_readable_and_do_not_expose_paths():

@@ -62,6 +62,7 @@ def build_zone_record(
     y2: float,
     *,
     active_zone_count: int,
+    enforce_zone_limit: bool = True,
 ) -> ZoneRecord:
     display_name = display_name.strip()
     zone_id = zone_id.strip().lower()
@@ -71,7 +72,7 @@ def build_zone_record(
         raise ValueError("Zone bounds must satisfy 0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1.")
     if zone_id == "outside_view":
         raise ValueError("outside_view is reserved for system events.")
-    if active_zone_count >= 4:
+    if enforce_zone_limit and active_zone_count >= 4:
         raise ValueError("The workspace is limited to four named zones.")
     return ZoneRecord(
         id=zone_id,
@@ -379,6 +380,25 @@ class LocalRecallFacadeImpl:
             active_zone_count=len(self.store.list_zones()),
         )
         return self.store.add_zone(record)
+
+    def update_zone(
+        self, display_name: str, zone_id: str, x1: float, y1: float, x2: float, y2: float
+    ) -> ZoneRecord:
+        active_ids = {zone.id for zone in self.store.list_zones()}
+        normalized_id = (zone_id or "").strip().lower()
+        if normalized_id not in active_ids:
+            raise ValueError(f"No active zone has ID `{normalized_id}`; select it again.")
+        record = build_zone_record(
+            display_name,
+            normalized_id,
+            x1,
+            y1,
+            x2,
+            y2,
+            active_zone_count=len(active_ids),
+            enforce_zone_limit=False,
+        )
+        return self.store.upsert_zone(record)
 
     def approve_event(self, event_id: int) -> EventRecord:
         return self.store.set_event_decision(event_id, True)
