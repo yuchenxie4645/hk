@@ -16,3 +16,9 @@ data/evaluation/generated/**
 data/evaluation/results/**
 gradio_tmp/**
 localrecall.egg-info/
+
+# Root files kept only in local working copies
+/AGENTS.md
+/README.md
+/LocalRecall_Codex_Master_Prompt.md
+/LocalRecall_Team_Task_Prompts.md
