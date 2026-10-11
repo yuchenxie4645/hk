@@ -110,21 +110,25 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                 gr.Markdown(
                     "### Recommended demo path: Manual Remember\n"
                     "Add an earlier image on the left and a later image on the right. "
-                    "Upload PNG/JPEG files or take two browser-camera snapshots. "
+                    "Capture each moment with the Spark camera, or upload PNG/JPEG files as a fallback. "
                     "This path works even when live streaming is unavailable.",
                     elem_classes=["lr-callout"],
                 )
                 with gr.Row():
-                    before = gr.Image(
-                        label="1 · BEFORE — earlier moment",
-                        sources=["webcam", "upload"],
-                        type="numpy",
-                    )
-                    after = gr.Image(
-                        label="2 · AFTER — later moment",
-                        sources=["webcam", "upload"],
-                        type="numpy",
-                    )
+                    with gr.Column():
+                        before = gr.Image(
+                            label="1 · BEFORE — earlier moment",
+                            sources=["upload", "webcam"],
+                            type="numpy",
+                        )
+                        capture_before_button = gr.Button("Capture BEFORE (Spark camera)")
+                    with gr.Column():
+                        after = gr.Image(
+                            label="2 · AFTER — later moment",
+                            sources=["upload", "webcam"],
+                            type="numpy",
+                        )
+                        capture_after_button = gr.Button("Capture AFTER (Spark camera)")
                 analyze_button = gr.Button("Analyze BEFORE + AFTER", variant="primary", size="lg")
                 with gr.Group():
                     gr.Markdown("### What LocalRecall observed")
@@ -158,7 +162,7 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                             camera_health = gr.Markdown("**Laptop browser frame status:** not started")
                             gr.Markdown(
                                 "Use the preview’s own controls to start or stop the stream. "
-                                "The camera belongs to this laptop browser, not the headless Spark. "
+                                "This preview uses the laptop browser camera, not the Spark camera. "
                                 "This ingress-only preview reports frame arrival; it does not detect or analyze movement.",
                                 elem_classes=["lr-small"],
                             )
@@ -320,7 +324,8 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                 gr.Markdown("## System health and data handling")
                 system_status = gr.Markdown()
                 gr.Markdown(
-                    "Camera frames travel from this browser to the local backend over your laptop-to-GB10 connection. "
+                    "The Spark camera takes a snapshot only when you press a Capture button. "
+                    "Laptop-browser camera frames travel from this browser to the local backend over your laptop-to-GB10 connection. "
                     "The app retains enrolled object references and selected event evidence; it does not write a "
                     "continuous video. Gradio may create temporary upload/cache files in the configured local "
                     "folder, which the app manages and cleans up. The status above reports the observed cache count.",
@@ -328,7 +333,8 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
                 )
                 with gr.Accordion("How this local demo works", open=False):
                     gr.Markdown(
-                        "- The browser laptop owns the webcam; the Spark/GB10 does not need a camera.\n"
+                        "- A camera attached to the Spark takes one snapshot per Capture button press; it never records video. "
+                        "File uploads and the laptop-browser webcam remain optional fallbacks.\n"
                         "- The manual BEFORE/AFTER path is the reliable fallback and sends one bounded comparison to the local model.\n"
                         "- Backend A validates the model response against registered object and zone IDs before memory can change.\n"
                         "- SQLite is the factual memory. Low-confidence or uncertain observations do not update locations.\n"
@@ -354,6 +360,18 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
         def wrapped_analyze(before_image, after_image):
             try:
                 return callbacks.analyze_pair(facade, before_image, after_image)
+            except Exception as exc:
+                raise gr.Error(str(exc)) from exc
+
+        def wrapped_capture_before():
+            try:
+                return callbacks.capture_spark_frame(facade)
+            except Exception as exc:
+                raise gr.Error(str(exc)) from exc
+
+        def wrapped_capture_after():
+            try:
+                return callbacks.capture_spark_frame(facade)
             except Exception as exc:
                 raise gr.Error(str(exc)) from exc
 
@@ -457,6 +475,20 @@ def create_app(facade, *, temp_allowed_path: str | None = None) -> gr.Blocks:
             inputs=[before, after],
             outputs=[event_summary, event_details, event_evidence],
             queue=True,
+        )
+        capture_before_button.click(
+            wrapped_capture_before,
+            outputs=[before],
+            queue=True,
+            concurrency_id="spark_camera",
+            concurrency_limit=1,
+        )
+        capture_after_button.click(
+            wrapped_capture_after,
+            outputs=[after],
+            queue=True,
+            concurrency_id="spark_camera",
+            concurrency_limit=1,
         )
         ask_button.click(wrapped_ask, inputs=[question], outputs=[answer, ask_evidence], queue=True)
         question.submit(wrapped_ask, inputs=[question], outputs=[answer, ask_evidence], queue=True)

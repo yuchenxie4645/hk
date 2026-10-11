@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     browser_stream_interval_sec: float = 0.5
     browser_max_width: int = 1280
     browser_source_stale_seconds: float = 4.0
+    spark_camera_index: int = 0
     auto_accept_confidence: float = 0.70
     review_confidence: float = 0.45
     gradio_temp_dir: str = "./data/tmp/gradio"

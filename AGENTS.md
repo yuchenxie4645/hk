@@ -4,7 +4,7 @@ The authoritative product and architecture requirements are in `LocalRecall_Code
 
 ## Architecture rules
 
-- The camera belongs to the presenter laptop browser. Never require `/dev/video*` on the GB10 or call `cv2.VideoCapture(0)`.
+- A camera attached to the Spark is the primary capture device. Open it with `cv2.VideoCapture(SPARK_CAMERA_INDEX)` only inside `SparkCameraSource` in `app/camera.py`, and only for explicit user-triggered snapshots. The laptop-browser webcam and file uploads remain optional fallbacks. Never write continuous video, and never call the VLM from capture code. This owner-approved override supersedes the camera sections of `LocalRecall_Codex_Master_Prompt.md`, `LocalRecall_Implementation_Blueprint.md`, and `HEADLESS_CAMERA_RUNBOOK.md`.
 - Use Gradio Blocks and direct calls through `app/contracts.py`; do not add a separate application REST API, WebSockets, React, or a public Gradio share tunnel.
 - Keep model calls behind `VLMClient`. The MVP model is `nvidia/Qwen3.8-27B-NVFP4`, served locally with the Spark-specific `vllm/vllm-openai:qwen38` Docker image.
 - Keep offline model URLs on loopback. SQLite is factual memory; model prose never updates state without schema/ID validation and confidence policy.

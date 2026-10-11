@@ -17,7 +17,7 @@ import httpx
 import numpy as np
 from PIL import Image
 
-from app.camera import BrowserPushSource
+from app.camera import BrowserPushSource, SparkCameraSource
 from app.composite import build_composite
 from app.config import Settings, get_settings
 from app.event_analyzer import EventAnalyzer
@@ -130,6 +130,7 @@ class LocalRecallFacadeImpl:
             max_width=self.settings.browser_max_width,
             stale_seconds=self.settings.browser_source_stale_seconds,
         )
+        self._spark_camera: SparkCameraSource | None = None
         self._inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="localrecall-vlm")
         self._inference_slot = threading.BoundedSemaphore(value=1)
         self._state_lock = threading.Lock()
@@ -176,6 +177,13 @@ class LocalRecallFacadeImpl:
     def ingest_frame(self, frame: np.ndarray, source_id: str) -> dict:
         receipt = self.frame_source.ingest_frame(frame, source_id)
         return receipt
+
+    def capture_camera_frame(self) -> np.ndarray:
+        with self._state_lock:
+            if self._spark_camera is None:
+                self._spark_camera = SparkCameraSource(self.settings.spark_camera_index)
+            camera = self._spark_camera
+        return camera.capture()
 
     def analyze_pair(self, before: np.ndarray, after: np.ndarray) -> EventRecord:
         before = self._validate_frame(before, "BEFORE")

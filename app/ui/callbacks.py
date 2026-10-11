@@ -38,6 +38,10 @@ def analyze_pair(facade: LocalRecallFacade, before: np.ndarray | None, after: np
     return event_markdown(event), event.model_dump(mode="json"), gallery
 
 
+def capture_spark_frame(facade: LocalRecallFacade) -> np.ndarray:
+    return facade.capture_camera_frame()
+
+
 def ask(facade: LocalRecallFacade, question: str):
     text = (question or "").strip()
     if not text:

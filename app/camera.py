@@ -1,4 +1,9 @@
-"""Browser-origin frame sources. This module never opens server-local camera devices."""
+"""Frame sources: browser-pushed frames, fixture videos, and explicit Spark camera snapshots.
+
+`SparkCameraSource` is the only code allowed to open a server-local camera device. It opens the
+device per user-triggered snapshot, releases it immediately, never writes video, and never calls
+the VLM.
+"""
 
 from __future__ import annotations
 
@@ -114,6 +119,72 @@ class BrowserPushSource:
             "ingest_fps": round(fps, 2),
             "buffered_frames": len(self._ring),
         }
+
+
+def _is_valid_bgr(frame: object) -> bool:
+    return (
+        isinstance(frame, np.ndarray)
+        and frame.dtype == np.uint8
+        and frame.ndim == 3
+        and frame.shape[2] == 3
+        and frame.shape[0] > 0
+        and frame.shape[1] > 0
+    )
+
+
+class SparkCameraSource:
+    """Single still snapshots from a camera attached to the Spark, opened only for the capture."""
+
+    def __init__(
+        self,
+        index: int = 0,
+        *,
+        warmup_reads: int = 8,
+        lock_timeout_seconds: float = 2.0,
+        max_width: int = 1920,
+        max_height: int = 1080,
+    ):
+        self.index = index
+        self.warmup_reads = max(1, warmup_reads)
+        self.lock_timeout_seconds = lock_timeout_seconds
+        self.max_width = max_width
+        self.max_height = max_height
+        self._lock = threading.Lock()
+
+    def capture(self) -> np.ndarray:
+        if not self._lock.acquire(timeout=self.lock_timeout_seconds):
+            raise RuntimeError(
+                f"Spark camera {self.index} is busy with another capture; try again in a moment."
+            )
+        try:
+            return self._capture_locked()
+        finally:
+            self._lock.release()
+
+    def _capture_locked(self) -> np.ndarray:
+        frame: np.ndarray | None = None
+        capture = cv2.VideoCapture(self.index, cv2.CAP_V4L2)
+        try:
+            if not capture.isOpened():
+                raise RuntimeError(
+                    f"Spark camera {self.index} could not be opened; check the cable or "
+                    "SPARK_CAMERA_INDEX, or upload images instead."
+                )
+            for _ in range(self.warmup_reads):
+                ok, bgr = capture.read()
+                if ok and _is_valid_bgr(bgr):
+                    frame = bgr
+        finally:
+            capture.release()
+        if frame is None:
+            raise RuntimeError(f"Spark camera {self.index} returned no frames; upload images instead.")
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        height, width = rgb.shape[:2]
+        scale = min(self.max_width / width, self.max_height / height)
+        if scale < 1.0:
+            size = (max(1, int(width * scale)), max(1, int(height * scale)))
+            rgb = cv2.resize(rgb, size, interpolation=cv2.INTER_AREA)
+        return np.ascontiguousarray(rgb)
 
 
 class FixtureSource:

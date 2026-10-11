@@ -1,6 +1,6 @@
 # LocalRecall operator runbook
 
-This runbook targets the headless Ubuntu 24.04 GB10 server. The laptop browser owns the webcam. The exact machine currently available is recorded in `STATUS.md`; do not treat development Spark testing as organizer-GX10 validation.
+This runbook targets the headless Ubuntu 24.04 GB10 server. A USB camera attached to the Spark is the primary BEFORE/AFTER capture device; the laptop browser webcam and file uploads are fallbacks. The exact machine currently available is recorded in `STATUS.md`; do not treat development Spark testing as organizer-GX10 validation.
 
 ## One-time setup
 
@@ -42,6 +42,14 @@ For UI-only fixture work without SQLite or vLLM:
 .venv/bin/python -m app.ui.app --mock --host 127.0.0.1 --port 7861
 ```
 
+## Spark camera
+
+- Set `SPARK_CAMERA_INDEX` in `.env` (default `0`, which opens `/dev/video0` through V4L2). On the development Spark, `/dev/video1` is not a capture node.
+- The user running the app must be able to read `/dev/video*`. These nodes are usually `root:video`, so add the user to the `video` group (`sudo usermod -aG video "$USER"`, then log in again) unless a desktop-seat ACL already grants access. Check with `ls -l /dev/video0` and `getfacl /dev/video0`.
+- To capture: on the Watch tab, press **Capture BEFORE (Spark camera)**, change the scene, press **Capture AFTER (Spark camera)**, then press **Analyze BEFORE + AFTER**. Each press opens the camera, takes one snapshot, and releases it. Snapshots are not saved unless Analyze retains them as event evidence.
+- If capture fails (camera unplugged, wrong index, permission denied, or camera busy), the UI shows the error. Upload PNG/JPEG files into the same BEFORE/AFTER boxes instead.
+- The organizer GX10 needs its own USB camera attached; a camera on the development Spark does not carry over.
+
 ## Connect the presenter laptop
 
 On the laptop, keep this terminal open:
@@ -52,7 +60,7 @@ ssh -N -L 7860:127.0.0.1:7860 <spark-user>@<spark-lan-ip>
 
 On that laptop, open `http://127.0.0.1:7860`. Grant the browser permission for the laptop camera if using webcam snapshots or optional streaming. Upload two image files if camera access is unavailable. Do not use a plain `http://<spark-ip>:7860` URL for webcam permission, and do not enable Gradio sharing.
 
-The present app supports the manual pair path. The browser live stream currently reports ingress health only; automatic motion detection is not enabled. Start with upload/snapshot BEFORE and AFTER, then inspect the event and ask `Where are my keys?`.
+The present app supports the manual pair path. The browser live stream currently reports ingress health only; automatic motion detection is not enabled. Start with Spark camera captures (or uploads) for BEFORE and AFTER, then inspect the event and ask `Where are my keys?`.
 
 ## Offline demonstration
 

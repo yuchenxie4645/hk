@@ -11,6 +11,8 @@ For a two-person, beginner-friendly backend split, see [backend_friendly.md](bac
 
 The first acceptance path is manual: provide separate BEFORE and AFTER images in the browser, analyze the pair with a local vision-language model, validate the structured result, store event evidence and accepted state in SQLite, then answer a query from those records. This path must work without a camera or a streaming session.
 
+A USB camera attached to the Spark is now the primary capture device: the Watch tab's **Capture BEFORE (Spark camera)** and **Capture AFTER (Spark camera)** buttons each take one snapshot on the server (`SPARK_CAMERA_INDEX`, default `0`), and no video is recorded. File uploads and the laptop-browser webcam remain fallbacks; see [RUNBOOK.md](RUNBOOK.md#spark-camera).
+
 Optional Watch Mode comes later. The presenter laptop browser owns the webcam and sends sampled frames to the headless GB10 over a private connection. OpenCV detects scene changes from those browser-supplied frames. The system retains a bounded in-memory ring, selects stable BEFORE and AFTER images, and sends a labeled composite to the local model only after a candidate event. The GB10 itself does not need a camera.
 
 ```text

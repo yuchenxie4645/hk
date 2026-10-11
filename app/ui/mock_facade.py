@@ -147,6 +147,9 @@ class MockFacade:
         self.last_source_time = time.monotonic()
         return {"accepted": True, "frames_received": self.frames_received, "ingest_fps": 2.0}
 
+    def capture_camera_frame(self) -> np.ndarray:
+        raise RuntimeError("MOCK mode does not use the Spark camera; upload an image instead.")
+
     def analyze_pair(self, before: np.ndarray, after: np.ndarray) -> EventRecord:
         before = LocalRecallFacadeImpl._validate_frame(before, "BEFORE")
         after = LocalRecallFacadeImpl._validate_frame(after, "AFTER")
