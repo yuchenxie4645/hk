@@ -112,5 +112,6 @@ Initial interpretation: this is an ARM64 Ubuntu GB10 environment with a suitable
   | Ambiguous: mug occluded in AFTER | `uncertain`, 0.40 | state unchanged; no evidence saved | 5623 ms |
 
 - Ask, deterministic path: "Where is the red cube?" → Right Tray, cites #1; "Where is the blue mug?" → Left Tray, cites #3 (unchanged by the ambiguous trial); "What moved most recently?" → #3. Every cited evidence file existed on disk and every answer matched the SQLite current state.
+- Real Gradio server: `python -m app.ui.app --backend` (temporary data directory, port 7862) driven with `gradio_client` through the UI's own handlers: load zones 175 ms; enroll Red Cube 109 ms; Analyze BEFORE + AFTER 6422 ms wall (6207 ms model) → `move` red_cube left_tray → right_tray, 95%, accepted, three evidence images; Ask "Where is the red cube?" 146 ms → Right Tray, cites #1, two evidence images.
 - Gates: `make test` 74 passed; `make lint` clean.
-- Not verified: real camera photos (trials used synthetic labeled shapes), accuracy beyond these four trials, the real Gradio UI in a browser with real inference, the presenter-laptop SSH/webcam path, WAN-off operation, and the organizer GX10.
+- Not verified: browser rendering of the real-mode UI (browser automation was unavailable), real camera photos (trials used synthetic labeled shapes), accuracy beyond these trials, the presenter-laptop SSH/webcam path, WAN-off operation, and the organizer GX10.
