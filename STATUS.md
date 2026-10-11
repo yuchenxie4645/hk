@@ -96,3 +96,21 @@ Initial interpretation: this is an ARM64 Ubuntu GB10 environment with a suitable
 - Changed: `app/ui/*`, `app/facade.py` (shared validators only on this PR—demo zone upsert is on `feature/backend-demo-zones`), `scripts/ensure_python.sh`, `Makefile`, `README.md`, `AGENTS.md`, `tests/test_ui_callbacks.py`, `tests/test_facade_conformance.py`, `tests/test_mock_labeling.py`.
 - Verification: `make test` (70 passed) and `make lint` observed on macOS mock path; mock UI smoke on Setup/Memory/System tabs; callback smoke for Analyze/Ask/review/export/delete/restore.
 - Next: open Frontend B PR stacked on merged or parallel backend demo-zone PR; optional browser BEFORE/AFTER upload QA on Watch tab.
+
+### Integration: Frontend A + Frontend B on master, first real-Qwen end-to-end trials
+
+- Merged: PR #3 (Frontend A) as `9c9d20d`; PR #2 (Frontend B) as `c358c5b`, with conflicts in `STATUS.md` and `app/ui/{app,callbacks,mock_facade,transforms}.py` resolved (A's layout and formatting, B's wiring, validation, and mock behavior). The `upsert_zone` path from Frontend B landed with this merge.
+- Runtime observed: vLLM on `127.0.0.1:8000` answers `/health`; `/v1/models` serves id `qwen38-27b` with root `Inferact/Qwen3.8-27B-NVFP4` and `max_model_len` 65536. It was not started by `scripts/start_vllm.sh`. The app requires `VLM_MODEL=qwen38-27b` in the gitignored `.env` on this machine.
+- Fixed from real-model failures: with thinking enabled, two-object scenes exhausted the 512-token budget in reasoning and returned empty content (the no-change trial used 506 of 512 tokens). Requests now send `chat_template_kwargs: {"enable_thinking": false}`. With thinking off, an occluded object was reported as `disappear` at 0.95 confidence and auto-accepted, so `event_extractor.txt` now requires `uncertain` for covered or not clearly visible objects and `appear` (never move from `outside_view`) for new objects. `tests/test_vlm_http_integration.py` now asserts the configured model name instead of a hard-coded one.
+- Real trials, through `LocalRecallFacadeImpl.analyze_pair` with a temporary SQLite database, synthetic labeled scenes, and real `qwen38-27b` inference (final run, after both fixes):
+
+  | Trial | Model result | Memory effect | Model latency |
+  |---|---|---|---|
+  | Move: red cube left_tray → right_tray | `move` red_cube left_tray → right_tray, 0.95, accepted | state right_tray (event #1) | 6930 ms |
+  | No change: hand passes through | `no_change`, 0.95 | state unchanged | 6676 ms |
+  | Newly enrolled blue mug appears in left_tray | `appear` blue_mug → left_tray, 0.95, accepted | state left_tray (event #3) | 5951 ms |
+  | Ambiguous: mug occluded in AFTER | `uncertain`, 0.40 | state unchanged; no evidence saved | 5623 ms |
+
+- Ask, deterministic path: "Where is the red cube?" → Right Tray, cites #1; "Where is the blue mug?" → Left Tray, cites #3 (unchanged by the ambiguous trial); "What moved most recently?" → #3. Every cited evidence file existed on disk and every answer matched the SQLite current state.
+- Gates: `make test` 74 passed; `make lint` clean.
+- Not verified: real camera photos (trials used synthetic labeled shapes), accuracy beyond these four trials, the real Gradio UI in a browser with real inference, the presenter-laptop SSH/webcam path, WAN-off operation, and the organizer GX10.

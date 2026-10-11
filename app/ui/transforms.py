@@ -39,7 +39,7 @@ def event_markdown(event: EventRecord) -> str:
         f"{mock_banner}### {object_name}: {event_name}\n"
         f"**{transition}** · {event.confidence:.0%} confidence · {review} · Event #{event.id}\n\n"
         f"{evidence}\n\n"
-        f"_Interpretation: {model}{latency}."
+        f"_Interpretation: {model}{latency}._"
     )
 
 

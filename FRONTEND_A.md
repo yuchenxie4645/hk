@@ -6,7 +6,7 @@ Frontend A owns the visible Gradio experience for LocalRecall: the screen struct
 
 The interface should make the product understandable to a first-time presenter. A user should know what to upload, when the laptop camera is active, what LocalRecall observed, where the answer came from, and how privacy is being handled.
 
-Follow [`LocalRecall_Codex_Master_Prompt.md`](./LocalRecall_Codex_Master_Prompt.md) for the product requirements and [`BACKEND_A.md`](./BACKEND_A.md) for the model-result terminology and confidence behavior.
+Follow [`LocalRecall_Codex_Master_Prompt.md`](./LocalRecall_Codex_Master_Prompt.md) for the product requirements, including the model-result terminology and confidence behavior.
 
 ## Owns
 
