@@ -32,7 +32,7 @@ def test_manual_pair_uses_openai_http_contract_and_persists_evidence(tmp_path):
             np.full((80, 120, 3), 255, dtype=np.uint8),
         )
         assert event.accepted
-        assert event.model_name == "nvidia/Qwen3.8-27B-NVFP4"
+        assert event.model_name == settings.vlm_model
         assert event.object_id == "red_cube"
         assert event.from_zone_id == "left_zone"
         assert event.to_zone_id == "right_zone"

@@ -94,6 +94,7 @@ class OpenAICompatibleVLMClient:
             ],
             "temperature": 0,
             "max_tokens": 512,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         return self._post(payload)
 
@@ -120,6 +121,7 @@ class OpenAICompatibleVLMClient:
             ],
             "temperature": 0,
             "max_tokens": 512,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         return self._post(payload)
 
@@ -146,6 +148,7 @@ class OpenAICompatibleVLMClient:
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
             "max_tokens": 256,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         content, _, _ = self._post(payload)
         cited_ids = {int(match) for match in self._citation_pattern.findall(content)}

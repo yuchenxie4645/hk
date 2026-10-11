@@ -16,8 +16,10 @@ Rules:
 1. Compare only visible evidence in BEFORE and AFTER.
 2. Do not invent an object, zone, or hidden destination.
 3. Select IDs only from the supplied allowed values.
-4. Use move only when the same registered object clearly changes location.
-5. Use appear when absent before and visible after; use disappear when visible before and absent after.
-6. Use no_change when no registered object changed; use uncertain when evidence is ambiguous.
-7. If multiple objects moved, report only the clearest one and lower confidence.
-8. Confidence describes visual certainty. Output JSON only, without Markdown.
+4. Use move only when the same registered object is visible in one allowed zone in BEFORE and a different allowed zone in AFTER.
+5. Use appear, with from_zone_id null, when the object is absent from every zone in BEFORE and visible in AFTER. Never use move from outside_view.
+6. Use disappear only when the object is visible in BEFORE and its former zone is clearly visible and empty in AFTER.
+7. If the object or its zone is covered, occluded, or otherwise not clearly visible in either scene, use uncertain. An object you cannot see may be hidden, not gone; never report disappear for it.
+8. Use no_change when no registered object changed; use uncertain when evidence is ambiguous.
+9. If multiple objects moved, report only the clearest one and lower confidence.
+10. Confidence describes visual certainty. Output JSON only, without Markdown.
